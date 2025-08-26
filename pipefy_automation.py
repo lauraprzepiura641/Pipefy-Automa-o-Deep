@@ -1,9 +1,14 @@
 import os
+import time
+import json
+import requests
+from datetime import datetime
 from flask import Flask
 import threading
-from datetime import datetime
 
-# Cria app Flask
+# ========================================
+# CONFIGURAÇÃO DO FLASK (Para Health Check)
+# ========================================
 app = Flask(__name__)
 
 @app.route('/')
@@ -11,21 +16,27 @@ def health_check():
     return {
         'status': 'online', 
         'service': 'Pipefy Automation',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'message': 'Automação rodando 24/7'
     }
+
+@app.route('/health')
+def health():
+    return {'status': 'healthy', 'time': datetime.now().isoformat()}
 
 def start_flask():
     """Inicia o Flask em porta aleatória para o Render"""
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
+    print(f"🌐 Servidor health check iniciado na porta {port}")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # Inicia Flask em thread separada
 flask_thread = threading.Thread(target=start_flask, daemon=True)
 flask_thread.start()
 
-import time
-import json
-import requests
+# ========================================
+# SUA AUTOMAÇÃO PIPEFY (Código Original)
+# ========================================
 
 # Configurações (via variáveis de ambiente no Render)
 TOKEN = os.environ.get('PIPEFY_TOKEN')
@@ -170,16 +181,18 @@ def main_loop():
             print(f"💥 Erro inesperado: {e}")
             time.sleep(60)  # Espera 1 minuto antes de continuar
 
-# Iniciar em thread separada para não bloquear
-def start_automation():
-    thread = threading.Thread(target=main_loop)
-    thread.daemon = True
-    thread.start()
-
+# ========================================
+# INICIALIZAÇÃO
+# ========================================
 if __name__ == "__main__":
-    start_automation()
+    print("🌐 Iniciando servidor health check...")
+    print("🤖 Iniciando automação Pipefy...")
     
-    # Manter o script rodando
+    # Inicia a automação em thread separada
+    automation_thread = threading.Thread(target=main_loop, daemon=True)
+    automation_thread.start()
+    
+    # Mantém o script vivo
     try:
         while True:
             time.sleep(1)
