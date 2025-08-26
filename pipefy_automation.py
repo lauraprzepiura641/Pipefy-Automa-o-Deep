@@ -35,7 +35,7 @@ flask_thread = threading.Thread(target=start_flask, daemon=True)
 flask_thread.start()
 
 # ========================================
-# SUA AUTOMAÇÃO PIPEFY (Código Original)
+# SUA AUTOMAÇÃO PIPEFY (Código Otimizado)
 # ========================================
 
 # Configurações (via variáveis de ambiente no Render)
@@ -73,7 +73,7 @@ def salvar_ids_copiados(ids):
         print(f"Erro ao salvar IDs: {e}")
 
 def buscar_cards_novos():
-    """Busca os cards na fase de origem."""
+    """Busca os cards na fase de origem com todos os campos."""
     query_busca = f"""
     query {{
       phase(id: {PHASE_ID_ORIGEM}) {{
@@ -82,6 +82,16 @@ def buscar_cards_novos():
             node {{
               id
               title
+              fields {{
+                name
+                value
+                field {{
+                  id
+                  internal_id
+                }}
+              }}
+              createdAt
+              updatedAt
             }}
           }}
         }}
@@ -101,9 +111,52 @@ def buscar_cards_novos():
         print(f"Erro ao buscar cards: {e}")
         return []
 
-def criar_card_destino(titulo):
-    """Cria um card no destino."""
-    titulo_seguro = titulo.replace('"', '\\"')
+def mapear_campos_pipefy():
+    """Mapeia os campos correspondentes entre as pipes."""
+    # ADAPTAR ESTES MAPEAMENTOS CONFORME SUAS PIPES
+    return {
+        # Exemplo: "id_do_campo_origem": "id_do_campo_destino"
+        "email": "email",
+        "telefone": "phone_number",
+        "nome": "name",
+        "descricao": "description"
+    }
+
+def criar_card_destino(card_node):
+    """Cria um card no destino copiando todos os campos."""
+    card = card_node["node"]
+    titulo_seguro = card["title"].replace('"', '\\"')
+    
+    # Prepara os campos para copiar
+    fields_attributes = []
+    mapeamento_campos = mapear_campos_pipefy()
+    
+    for field in card.get("fields", []):
+        field_name = field["name"].lower().replace(" ", "_")
+        field_value = field["value"]
+        
+        # Só copia campos com valor e que existem no mapeamento
+        if (field_value not in [None, "", "null", []] and 
+            field_name in mapeamento_campos.values()):
+            
+            fields_attributes.append({
+                "field_id": field["field"]["id"],
+                "field_value": str(field_value)
+            })
+    
+    # Adiciona campos obrigatórios se necessário (evita rascunhos)
+    # ADAPTE ESTES CAMPOS CONFORME SUA PIPE DESTINO
+    campos_obrigatorios = [
+        # Exemplo: {"field_id": "campo_obrigatorio_id", "field_value": "Valor padrão"}
+    ]
+    
+    fields_attributes.extend(campos_obrigatorios)
+    
+    # Converte para formato GraphQL
+    if fields_attributes:
+        fields_str = json.dumps(fields_attributes).replace('"', '')
+    else:
+        fields_str = "[]"
 
     query_cria = f"""
     mutation {{
@@ -111,29 +164,42 @@ def criar_card_destino(titulo):
         input: {{
           pipe_id: {PIPE_ID_DESTINO},
           phase_id: {PHASE_ID_DESTINO},
-          title: "{titulo_seguro}"
+          title: "{titulo_seguro}",
+          fields_attributes: {fields_str}
         }}
       ) {{
         card {{
           id
           title
+          url
           current_phase {{ name }}
+          fields {{
+            name
+            value
+          }}
         }}
+        success
       }}
     }}
     """
+    
     try:
         res = requests.post(url, json={"query": query_cria}, headers=headers)
         data = res.json()
 
         if "errors" in data:
-            print("Erro ao criar card:", data["errors"])
+            print("❌ Erro ao criar card:", data["errors"])
+            # Log detalhado para debugging
+            print("Query enviada:", query_cria)
             return False
         else:
-            print("✅ Card criado:", data["data"]["createCard"]["card"]["title"])
+            card_criado = data["data"]["createCard"]["card"]
+            print(f"✅ Card criado: {card_criado['title']}")
+            print(f"   📎 URL: {card_criado['url']}")
             return True
+            
     except Exception as e:
-        print(f"Erro ao criar card: {e}")
+        print(f"❌ Erro ao criar card: {e}")
         return False
 
 def executar_automacao():
@@ -149,20 +215,26 @@ def executar_automacao():
         card_id = card["id"]
 
         if card_id not in ids_copiados:
-            sucesso = criar_card_destino(card["title"])
+            print(f"🔄 Processando card: {card['title']}")
+            sucesso = criar_card_destino(edge)
             if sucesso:
                 ids_copiados.add(card_id)
                 novos_cards += 1
+                # Pequena pausa entre cards para evitar rate limit
+                time.sleep(1)
 
     if novos_cards > 0:
         salvar_ids_copiados(ids_copiados)
-        print(f"✅ {novos_cards} novo(s) card(s) copiado(s)")
+        print(f"🎉 {novos_cards} novo(s) card(s) copiado(s) com sucesso!")
     else:
         print("ℹ️ Nenhum novo card para copiar")
 
 def main_loop():
     """Loop principal da automação."""
     print("🚀 Iniciando automação Pipefy no Render")
+    print(f"📍 Fase Origem: {PHASE_ID_ORIGEM}")
+    print(f"📍 Fase Destino: {PHASE_ID_DESTINO}")
+    print(f"⏰ Intervalo: {INTERVALO_MINUTOS} minutos")
     
     # Verifica se as variáveis de ambiente estão configuradas
     if not TOKEN:
@@ -172,7 +244,7 @@ def main_loop():
     while True:
         try:
             executar_automacao()
-            print(f"⏳ Aguardando {INTERVALO_MINUTOS} minutos...")
+            print(f"⏳ Próxima verificação em {INTERVALO_MINUTOS} minutos...")
             time.sleep(INTERVALO_MINUTOS * 60)
         except KeyboardInterrupt:
             print("🛑 Automação interrompida pelo usuário")
