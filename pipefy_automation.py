@@ -8,10 +8,10 @@ from datetime import datetime
 # CONFIGURAÇÕES
 # ========================================
 TOKEN = os.environ.get('PIPEFY_TOKEN')
-PHASE_ID_ORIGEM = int(os.environ.get('PHASE_ID_ORIGEM', 339844827))
-PHASE_ID_DESTINO = int(os.environ.get('PHASE_ID_DESTINO', 339844842))
-PIPE_ID_DESTINO = int(os.environ.get('PIPE_ID_DESTINO', 306600600))
-PIPE_ID_ORIGEM = int(os.environ.get('PIPE_ID_ORIGEM', 306600600))  # Adicione esta linha
+PHASE_ID_ORIGEM = int(os.environ.get('PHASE_ID_ORIGEM', 339726368))
+PHASE_ID_DESTINO = int(os.environ.get('PHASE_ID_DESTINO', 339838186))
+PIPE_ID_DESTINO = int(os.environ.get('PIPE_ID_DESTINO', 306595396))
+PIPE_ID_ORIGEM = int(os.environ.get('PIPE_ID_ORIGEM', 306579424))  # Adicione esta linha
 
 # Arquivo onde vamos salvar os IDs já copiados
 ARQUIVO_IDS = "cards_copiados.json"
@@ -279,4 +279,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
